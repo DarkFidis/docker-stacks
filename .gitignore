@@ -1,0 +1,7 @@
+.idea/
+*/certs/
+*/*.local
+*/.env
+tmp/
+/neo4j/neo4j/
+/gitlab-runner/config.toml
