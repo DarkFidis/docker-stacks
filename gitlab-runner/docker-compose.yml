@@ -1,0 +1,20 @@
+version: '3'
+
+services:
+
+  gitlab-runner:
+    image: gitlab/gitlab-runner
+    container_name: gitlab-runner
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./config/gitlab-runner:/etc/gitlab-runner
+    network_mode: bridge
+    restart: unless-stopped
+
+  gitlab-runner-docker-cleanup:
+    image: quay.io/gitlab/gitlab-runner-docker-cleanup
+    container_name: gitlab-runner-docker-cleanup
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    network_mode: bridge
+    restart: unless-stopped
