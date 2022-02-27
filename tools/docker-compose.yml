@@ -1,0 +1,195 @@
+version: '3'
+
+services:
+
+  portainer:
+    build:
+      context: portainer
+    container_name: portainer
+    ports:
+      - 9000:9000
+    healthcheck:
+      test: curl -f -s -o /dev/null http://localhost:9000/ && echo OK
+    privileged: true
+    volumes:
+      - ${PORTAINER_DATA_DIR:-./portainer/data}:/data:Z
+      - /var/run/docker.sock:/var/run/docker.sock
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.portainer.rule=Host(`${PORTAINER_VIRTUAL_HOST:-portainer.localdomain}`)
+      - traefik.http.routers.portainer.entrypoints=${PORTAINER_ENTRYPOINTS:-web}
+      - traefik.http.services.portainer.loadbalancer.server.port=9000
+    network_mode: bridge
+    restart: unless-stopped
+
+  traefik:
+    image: traefik:v2.3.2
+    container_name: traefik
+    ports:
+      - 80:80
+      - 443:443
+    healthcheck:
+      test: traefik healthcheck
+    privileged: true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:Z
+      - ./traefik/config:/etc/traefik:Z
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.dashboard.rule=Host(`${TRAEFIK_VIRTUAL_HOST:-traefik.localdomain}`)
+      - traefik.http.routers.dashboard.service=api@internal
+      - traefik.http.routers.dashboard.entrypoints=${TRAEFIK_ENTRYPOINTS:-web,websecure}
+      - traefik.http.routers.dashboard.middlewares=dashboard-auth
+      - traefik.http.middlewares.dashboard-auth.basicauth.users=${TRAEFIK_BASIC_AUTH_HASHES}
+    network_mode: bridge
+    restart: unless-stopped
+
+  duckdns-updater:
+    image: appropriate/curl:latest
+    container_name: duckdns-updater
+    command: curl -fsSL https://www.duckdns.org/update?domains=${PUBLIC_DUCKDNS_SUB_DOMAINS:-mydocker}&token=${DUCKDNS_TOKEN}
+    network_mode: bridge
+
+  gostatic:
+    image: pierrezemb/gostatic:latest
+    container_name: gostatic
+    expose:
+      - 8043
+    volumes:
+      - ./wwwroot:/srv/http
+    network_mode: bridge
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.gostatic.rule=Host(`${WEB_STATIC_VIRTUAL_HOST:-www.localdomain}`)
+      - traefik.http.routers.gostatic.entrypoints=${WEB_STATIC_ENTRYPOINTS:-web}
+
+  whoami:
+    image: containous/whoami:latest
+    container_name: whoami
+    network_mode: bridge
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.whoami.rule=Host(`${WHOAMI_VIRTUAL_HOST:-whoami.localdomain}`)
+      - traefik.http.routers.whoami.entrypoints=${WHOAMI_ENTRYPOINTS:-web}
+
+  docker-compose-ui:
+    image: francescou/docker-compose-ui:latest
+    container_name: docker-compose-ui
+    expose:
+      - 5000
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ..:/opt/docker-compose-projects
+    working_dir: /opt/docker-compose-projects
+    network_mode: bridge
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.compose.rule=Host(`${DOCKER_COMPOSE_UI_VIRTUAL_HOST:-compose.localdomain}`)
+      - traefik.http.routers.compose.entrypoints=${DOCKER_COMPOSE_UI_ENTRYPOINTS:-web}
+
+  dockly:
+    image: lirantal/dockly:latest
+    container_name: dockly
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    network_mode: bridge
+    restart: unless-stopped
+
+  http-echo:
+    image: kennship/http-echo:latest
+    container_name: http-echo
+    ports:
+      - 3000:3000
+    network_mode: bridge
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.echo.rule=Host(`${WEB_ECHO_VIRTUAL_HOST:-echo.localdomain}`)
+      - traefik.http.routers.echo.entrypoints=${WEB_ECHO_ENTRYPOINTS:-web}
+
+  ouroboros:
+    image: pyouroboros/ouroboros:latest
+    container_name: ouroboros
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - CLEANUP=true
+      - INTERVAL=300
+      - LOG_LEVEL=info
+      - SELF_UPDATE=true
+      - IGNORE=mongo influxdb postgres mariadb
+      - TZ=Europe/Paris
+    network_mode: bridge
+    restart: unless-stopped
+
+  proxy:
+    image: pottava/proxy
+    container_name: proxy
+    ports:
+      - 8080:80
+    environment:
+      - PROXY_URL=https://adminapi.laposte.fr/
+      - ACCESS_LOG=true
+    network_mode: bridge
+    restart: unless-stopped
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.36.0
+    container_name: cadvisor
+    expose:
+      - 8080
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    devices:
+      - /dev/kmsg
+    network_mode: bridge
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.cadvisor.rule=Host(`${CADVISOR_VIRTUAL_HOST:-cadvisor.localdomain}`)
+      - traefik.http.routers.cadvisor.entrypoints=${CADVISOR_ENTRYPOINTS:-web}
+      - traefik.http.routers.cadvisor.middlewares=cadvisor-auth
+      - traefik.http.middlewares.cadvisor-auth.basicauth.users=${BASIC_AUTH_HASHES}
+
+  glances:
+    image: nicolargo/glances:dev
+    container_name: glances
+    expose:
+      - 61208
+    healthcheck:
+      test: curl -f -s -o /dev/null http://localhost:61208/ && echo OK
+    environment:
+      - GLANCES_OPT=-w
+    privileged: true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    network_mode: bridge
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.glances.rule=Host(`${GLANCES_VIRTUAL_HOST:-glances.localdomain}`)
+      - traefik.http.routers.glances.entrypoints=${GLANCES_ENTRYPOINTS:-web}
+      - traefik.http.routers.glances.middlewares=glances-auth
+      - traefik.http.middlewares.glances-auth.basicauth.users=${BASIC_AUTH_HASHES}
+
+  whiteboard:
+    image: rofl256/whiteboard:latest
+    container_name: whiteboard
+    expose:
+      - 8080
+    network_mode: bridge
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.whiteboard.rule=Host(`${WHITEBOARD_VIRTUAL_HOST:-whiteboard.localdomain}`)
+      - traefik.http.routers.whiteboard.entrypoints=${WHITEBOARD_ENTRYPOINTS:-web}
+      - traefik.http.routers.whiteboard.middlewares=whiteboard-auth
+      - traefik.http.middlewares.whiteboard-auth.basicauth.users=${BASIC_AUTH_HASHES}

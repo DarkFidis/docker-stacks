@@ -1,0 +1,5 @@
+traefik/config/*
+!traefik/config/traefik.toml
+!portainer/Dockerfile
+portainer/data/*
+wwwroot/*

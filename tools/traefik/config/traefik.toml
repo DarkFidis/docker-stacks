@@ -1,0 +1,33 @@
+[global]
+checkNewVersion = false
+sendAnonymousUsage = false
+
+[log]
+level = "INFO"
+
+[entryPoints.web]
+address = ":80"
+
+[entryPoints.websecure]
+address = ":443"
+
+[entryPoints.websecure.http.tls]
+certResolver = "myresolver"
+
+[certificatesResolvers.myresolver.acme]
+email = "my-email@gmail.com"
+storage = "acme.json"
+
+[certificatesResolvers.myresolver.acme.tlsChallenge]
+
+[providers.docker]
+endpoint = "unix:///var/run/docker.sock"
+watch = true
+exposedByDefault = false
+
+[ping]
+entryPoint = "traefik"
+
+[api]
+dashboard = true
+insecure = true
