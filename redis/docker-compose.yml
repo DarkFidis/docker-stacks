@@ -1,0 +1,61 @@
+version: '3'
+
+services:
+
+  redis-server:
+    image: redis:5.0.7-alpine
+    container_name: redis-server
+    sysctls:
+      - net.core.somaxconn=511
+    healthcheck:
+      test: redis-cli -p 6379 ping > /dev/null && echo OK
+    ports:
+      - 6379:6379
+    volumes:
+      - ./redis/data:/data
+    network_mode: bridge
+    restart: unless-stopped
+
+  redis-commander:
+    image: rediscommander/redis-commander
+    container_name: redis-commander
+    healthcheck:
+      test: curl -f -s -o /dev/null http://localhost:8081/ && echo OK
+    ports:
+      - 8081:8081
+    links:
+      - redis-server
+    environment:
+      REDIS_HOST: redis-server
+      REDIS_PORT: 6379
+    network_mode: bridge
+    restart: unless-stopped
+    depends_on:
+      - redis-server
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.redis-commander.rule=Host(`${REDIS_COMMANDER_VIRTUAL_HOST:-rediscommander.localdomain}`)
+      - traefik.http.routers.redis-commander.entrypoints=${REDIS_COMMANDER_ENTRYPOINTS:-web}
+
+  readis:
+    image: hollodotme/readis
+    container_name: readis
+    healthcheck:
+      test: curl -f -s -o /dev/null http://localhost/ && echo OK
+    expose:
+      - 80
+    links:
+      - redis-server
+    environment:
+      REDIS_HOST: redis-server
+      READIS_HOST:
+    volumes:
+      - ./readis/config:/code/config:ro
+    network_mode: bridge
+    restart: unless-stopped
+    depends_on:
+      - redis-server
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.readis.rule=Host(`${READIS_VIRTUAL_HOST:-readis.local.io}`)
+      - traefik.http.routers.readis.entrypoints=${READIS_ENTRYPOINTS:-web}
