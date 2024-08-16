@@ -6,8 +6,8 @@ services:
     image: postgres:latest
     restart: unless-stopped
     environment:
-      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_USERNAME-root}
-      POSTGRES_USER: ${POSTGRES_ADMIN_PASSWORD-Secr3t!}
+      POSTGRES_USER: ${POSTGRES_ADMIN_USERNAME-root}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD-Secr3t!}
     ports:
       - "5432:5432"
     network_mode: bridge
